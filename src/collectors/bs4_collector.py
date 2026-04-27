@@ -12,7 +12,8 @@ class BS4Collector(BaseCollector):
     Coletor genérico usando requests + BeautifulSoup.
 
     Ele acessa uma página, procura links e tenta identificar
-    possíveis notícias com base nas tags <a>.
+    possíveis notícias reais, ignorando vídeos, páginas genéricas,
+    links de menu e conteúdos fora do padrão esperado.
     """
 
     def __init__(self, nome_fonte, url_base):
@@ -26,8 +27,40 @@ class BS4Collector(BaseCollector):
             )
         }
 
+    def _link_parece_noticia(self, url):
+        """
+        Verifica se a URL tem cara de notícia.
+
+        No G1, notícias normalmente terminam com .ghtml.
+        Também ignoramos links de vídeo, playlist, globoplay etc.
+        """
+
+        url = url.lower()
+
+        termos_bloqueados = [
+            "globoplay",
+            "playlist",
+            "/videos/",
+            "video",
+            "/futebol/",
+            "ge.globo.com",
+            "/loterias/",
+            "/podcast/",
+            "/ao-vivo/",
+        ]
+
+        for termo in termos_bloqueados:
+            if termo in url:
+                return False
+
+        if ".ghtml" not in url:
+            return False
+
+        return True
+
     def coletar(self):
         noticias = []
+        urls_encontradas = set()
 
         try:
             resposta = requests.get(
@@ -57,6 +90,14 @@ class BS4Collector(BaseCollector):
                 continue
 
             url_completa = urljoin(self.url_base, href)
+
+            if not self._link_parece_noticia(url_completa):
+                continue
+
+            if url_completa in urls_encontradas:
+                continue
+
+            urls_encontradas.add(url_completa)
 
             noticia = {
                 "titulo": titulo,
