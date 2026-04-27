@@ -1,5 +1,8 @@
 from datetime import datetime
+import os
 
+from dotenv import load_dotenv
+from src.database.bigquery_client import BigQueryClient
 from src.collectors.bs4_collector import BS4Collector
 from src.collectors.news_extractor import NewsExtractor
 from src.config.settings import RAW_DATA_DIR
@@ -9,6 +12,7 @@ from src.nlp.risk_classifier import analisar_risco
 from src.utils.file_handler import salvar_csv
 from src.processing.occurrence_formatter import padronizar_ocorrencia
 
+load_dotenv()
 
 def processar_noticia(noticia, extrator):
     """
@@ -103,6 +107,20 @@ def executar_pipeline():
     salvar_csv(noticias_processadas, caminho_saida_bruto)
     salvar_csv(noticias_relevantes, caminho_saida_relevante)
 
+    enviar_para_bigquery = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
+
+    if enviar_para_bigquery:
+        print("Enviando dados processados para o BigQuery...")
+
+        bq = BigQueryClient()
+
+        bq.criar_dataset_se_nao_existir()
+        bq.criar_tabela_ocorrencias_se_nao_existir()
+        bq.enviar_csv(caminho_saida_bruto)
+
+        print("Envio automático para BigQuery concluído.")
+    else:
+        print("Envio para BigQuery desativado no .env.")
 
 if __name__ == "__main__":
     executar_pipeline()
