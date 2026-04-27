@@ -159,7 +159,12 @@ def classificar_nivel_risco(texto, relevante_pcj):
         "desabrigados",
         "rompimento de barragem",
         "contaminacao de manancial",
+        "contaminação de manancial",
+        "manancial contaminado",
+        "agua contaminada",
+        "água contaminada",
         "interrupcao no abastecimento",
+        "interrupção no abastecimento",
         "estado de calamidade",
     ]):
         return 5
@@ -167,11 +172,24 @@ def classificar_nivel_risco(texto, relevante_pcj):
     if contem(texto_normalizado, [
         "transbordamento",
         "familias afetadas",
+        "famílias afetadas",
         "interdicao",
+        "interdição",
         "enchente",
         "inundacao",
+        "inundação",
         "alagamento severo",
         "risco alto",
+        "possivel contaminacao",
+        "possível contaminação",
+        "contaminacao",
+        "contaminação",
+        "poluicao",
+        "poluição",
+        "odor forte",
+        "alteracao na coloracao da agua",
+        "alteração na coloração da água",
+        "mortandade de peixes",
     ]):
         return 4
 
