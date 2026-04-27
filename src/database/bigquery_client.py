@@ -78,6 +78,58 @@ class BigQueryClient:
 
         print(f"Tabela pronta: {table.full_table_id}")
 
+    def preparar_dataframe_ocorrencias(self, df):
+        """
+        Ajusta os tipos das colunas antes do envio para o BigQuery.
+        """
+
+        colunas_texto = [
+            "id",
+            "titulo",
+            "url",
+            "fonte_nome",
+            "fonte_url",
+            "titulo_extraido",
+            "subtitulo",
+            "texto_original",
+            "texto_limpo",
+            "erro_extracao",
+            "termos_pcj",
+            "termos_hidricos",
+            "termos_exclusao",
+            "categoria",
+            "evento_principal",
+            "justificativa_risco",
+            "metodo_classificacao",
+        ]
+
+        for coluna in colunas_texto:
+            if coluna in df.columns:
+                df[coluna] = df[coluna].fillna("").astype(str)
+
+        colunas_data = [
+            "data_coleta",
+            "data_processamento",
+        ]
+
+        for coluna in colunas_data:
+            if coluna in df.columns:
+                df[coluna] = pd.to_datetime(
+                    df[coluna],
+                    errors="coerce"
+                )
+
+        if "relevante_pcj" in df.columns:
+            df["relevante_pcj"] = df["relevante_pcj"].astype(bool)
+
+        if "nivel_risco" in df.columns:
+            df["nivel_risco"] = pd.to_numeric(
+                df["nivel_risco"],
+                errors="coerce"
+            ).fillna(0).astype(int)
+
+        return df
+
     def enviar_dataframe(self, df, table_name=None):
         """
         Envia um DataFrame para uma tabela do BigQuery.
@@ -85,6 +137,8 @@ class BigQueryClient:
 
         if table_name is None:
             table_name = self.table_ocorrencias
+
+        df = self.preparar_dataframe_ocorrencias(df)
 
         table_id = f"{self.project_id}.{self.dataset_id}.{table_name}"
 
