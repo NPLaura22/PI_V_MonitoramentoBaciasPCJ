@@ -1,94 +1,171 @@
-TERMOS_PCJ = [
+import re
+import unicodedata
+
+
+TERMOS_GEOGRAFICOS_PCJ = [
     "pcj",
     "bacias pcj",
     "bacia pcj",
     "piracicaba",
     "capivari",
-    "jundiaí",
     "jundiai",
+    "jundiaí",
     "rio piracicaba",
     "rio capivari",
-    "rio jundiaí",
     "rio jundiai",
-    "agência pcj",
+    "rio jundiaí",
     "agencia pcj",
-    "comitês pcj",
+    "agência pcj",
     "comites pcj",
+    "comitês pcj",
     "campinas",
     "americana",
     "limeira",
-    "sumaré",
     "sumare",
-    "paulínia",
+    "sumaré",
     "paulinia",
+    "paulínia",
     "atibaia",
-    "bragança paulista",
     "braganca paulista",
+    "bragança paulista",
     "piracaia",
     "indaiatuba",
-    "jundiaí",
-    "jundiai",
-    "capivari",
-    "itupeva",
-    "vinhedo",
     "valinhos",
+    "vinhedo",
     "holambra",
     "nova odessa",
-    "santa bárbara d'oeste",
-    "santa barbara d'oeste",
+    "morungaba",
 ]
+
 
 TERMOS_HIDRICOS = [
     "chuva",
+    "chuvas",
     "temporal",
+    "temporais",
     "alagamento",
+    "alagamentos",
     "enchente",
-    "inundação",
+    "enchentes",
     "inundacao",
+    "inundação",
+    "inundacoes",
+    "inundações",
     "estiagem",
     "seca",
-    "falta de água",
+    "secas",
     "falta de agua",
-    "abastecimento",
-    "reservatório",
+    "falta de água",
+    "abastecimento de agua",
+    "abastecimento de água",
+    "racionamento",
     "reservatorio",
-    "vazão",
+    "reservatório",
+    "represa",
     "vazao",
-    "rio",
-    "ribeirão",
-    "ribeirao",
+    "vazão",
+    "nivel do rio",
+    "nível do rio",
+    "transbordamento",
+    "rio transbordou",
     "manancial",
-    "água",
-    "agua",
-    "contaminação",
+    "mananciais",
+    "qualidade da agua",
+    "qualidade da água",
     "contaminacao",
+    "contaminação",
+    "poluicao",
+    "poluição",
     "esgoto",
     "saneamento",
     "defesa civil",
-    "alerta",
     "cemaden",
+    "alerta de chuva",
+    "alerta meteorologico",
+    "alerta meteorológico",
+    "risco hidrologico",
+    "risco hidrológico",
 ]
 
 
-def texto_contem_termo(texto, termos):
+TERMOS_EXCLUSAO = [
+    "mega-sena",
+    "loteria",
+    "quina",
+    "apostas",
+    "futebol",
+    "ponte preta",
+    "guarani",
+    "olimpiada de matematica",
+    "olimpíada de matemática",
+    "medalhista",
+]
+
+
+def normalizar_texto(texto):
     """
-    Verifica se algum termo da lista aparece no texto.
+    Normaliza o texto para facilitar a comparação:
+    - transforma em minúsculas
+    - remove acentos
+    - remove espaços duplicados
     """
+
+    if not texto:
+        return ""
 
     texto = texto.lower()
 
-    for termo in termos:
-        if termo in texto:
-            return True
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(
+        caractere for caractere in texto
+        if unicodedata.category(caractere) != "Mn"
+    )
 
-    return False
+    texto = re.sub(r"\s+", " ", texto)
+
+    return texto.strip()
+
+
+def termo_aparece(texto, termo):
+    """
+    Verifica se o termo aparece como palavra/frase real,
+    evitando falso positivo com pedaços de palavras.
+
+    Exemplo:
+    - 'rio' não deve bater com 'sorteio'
+    - 'seca' não deve bater com 'consecutiva'
+    """
+
+    texto = normalizar_texto(texto)
+    termo = normalizar_texto(termo)
+
+    padrao = r"(?<!\w)" + re.escape(termo) + r"(?!\w)"
+
+    return re.search(padrao, texto) is not None
+
+
+def encontrar_termos(texto, lista_termos):
+    """
+    Retorna os termos encontrados no texto.
+    """
+
+    encontrados = []
+
+    for termo in lista_termos:
+        if termo_aparece(texto, termo):
+            encontrados.append(termo)
+
+    return encontrados
 
 
 def calcular_relevancia_pcj(titulo, texto_original=None):
     """
-    Calcula se uma notícia parece relevante para o projeto PCJ.
+    Calcula se uma notícia é relevante para o projeto PCJ.
 
-    Agora analisamos o título e, quando disponível, também o corpo da notícia.
+    Critério:
+    - não pode cair em termos claros de exclusão
+    - precisa ter pelo menos um termo geográfico da região PCJ
+    - precisa ter pelo menos um termo hídrico/evento ambiental
     """
 
     partes_texto = [titulo or ""]
@@ -96,12 +173,47 @@ def calcular_relevancia_pcj(titulo, texto_original=None):
     if texto_original:
         partes_texto.append(texto_original)
 
-    texto_completo = " ".join(partes_texto).lower()
+    texto_completo = " ".join(partes_texto)
 
-    tem_termo_pcj = texto_contem_termo(texto_completo, TERMOS_PCJ)
-    tem_termo_hidrico = texto_contem_termo(texto_completo, TERMOS_HIDRICOS)
+    termos_exclusao = encontrar_termos(texto_completo, TERMOS_EXCLUSAO)
 
-    if tem_termo_pcj and tem_termo_hidrico:
+    if termos_exclusao:
+        return False
+
+    termos_pcj = encontrar_termos(texto_completo, TERMOS_GEOGRAFICOS_PCJ)
+    termos_hidricos = encontrar_termos(texto_completo, TERMOS_HIDRICOS)
+
+    if termos_pcj and termos_hidricos:
         return True
 
     return False
+
+
+def explicar_relevancia_pcj(titulo, texto_original=None):
+    """
+    Retorna uma explicação do motivo da notícia ser ou não relevante.
+    Isso ajuda muito no debug e futuramente pode virar coluna no BigQuery.
+    """
+
+    partes_texto = [titulo or ""]
+
+    if texto_original:
+        partes_texto.append(texto_original)
+
+    texto_completo = " ".join(partes_texto)
+
+    termos_exclusao = encontrar_termos(texto_completo, TERMOS_EXCLUSAO)
+    termos_pcj = encontrar_termos(texto_completo, TERMOS_GEOGRAFICOS_PCJ)
+    termos_hidricos = encontrar_termos(texto_completo, TERMOS_HIDRICOS)
+
+    relevante = False
+
+    if not termos_exclusao and termos_pcj and termos_hidricos:
+        relevante = True
+
+    return {
+        "relevante": relevante,
+        "termos_exclusao": termos_exclusao,
+        "termos_pcj": termos_pcj,
+        "termos_hidricos": termos_hidricos,
+    }

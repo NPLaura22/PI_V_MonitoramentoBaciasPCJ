@@ -3,7 +3,7 @@ from datetime import datetime
 from src.collectors.bs4_collector import BS4Collector
 from src.collectors.news_extractor import NewsExtractor
 from src.config.settings import RAW_DATA_DIR
-from src.processing.relevance_filter import calcular_relevancia_pcj
+from src.processing.relevance_filter import explicar_relevancia_pcj
 from src.utils.file_handler import salvar_csv
 
 
@@ -29,12 +29,20 @@ for noticia in noticias:
     noticia["texto_original"] = dados_extraidos["texto_original"]
     noticia["erro_extracao"] = dados_extraidos["erro_extracao"]
 
-    noticia["relevante_pcj"] = calcular_relevancia_pcj(
+    analise_relevancia = explicar_relevancia_pcj(
         titulo=noticia["titulo"],
         texto_original=noticia["texto_original"]
     )
 
+    noticia["relevante_pcj"] = analise_relevancia["relevante"]
+    noticia["termos_pcj"] = ", ".join(analise_relevancia["termos_pcj"])
+    noticia["termos_hidricos"] = ", ".join(analise_relevancia["termos_hidricos"])
+    noticia["termos_exclusao"] = ", ".join(analise_relevancia["termos_exclusao"])
+
     print(f"Relevante PCJ: {noticia['relevante_pcj']}")
+    print(f"Termos PCJ encontrados: {noticia['termos_pcj']}")
+    print(f"Termos hídricos encontrados: {noticia['termos_hidricos']}")
+    print(f"Termos de exclusão encontrados: {noticia['termos_exclusao']}")
     print("-" * 60)
 
 noticias_relevantes = [
