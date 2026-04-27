@@ -65,7 +65,11 @@ def get_views_sql(project_id, dataset_id, table_ocorrencias):
       COUNTIF(nivel_risco >= 4) AS total_risco_alto_ou_critico,
       ROUND(AVG(nivel_risco), 2) AS media_nivel_risco,
       MAX(data_coleta) AS ultima_data_coleta,
+      FORMAT_TIMESTAMP('%d/%m/%Y %H:%M', MAX(data_coleta), 'America/Sao_Paulo') AS ultima_data_coleta_formatada,
+
       MAX(data_processamento) AS ultima_data_processamento,
+      FORMAT_TIMESTAMP('%d/%m/%Y %H:%M', MAX(data_processamento), 'America/Sao_Paulo') AS ultima_data_processamento_formatada,
+
       COUNT(DISTINCT fonte_nome) AS total_fontes
     FROM `{project_id}.{dataset_id}.vw_ocorrencias_dashboard`;
     """
