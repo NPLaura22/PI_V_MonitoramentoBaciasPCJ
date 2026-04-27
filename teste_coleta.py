@@ -6,6 +6,7 @@ from src.config.settings import RAW_DATA_DIR
 from src.processing.relevance_filter import explicar_relevancia_pcj
 from src.utils.file_handler import salvar_csv
 from src.processing.cleaner import limpar_texto_noticia
+from src.nlp.risk_classifier import analisar_risco
 
 
 coletor = BS4Collector(
@@ -44,10 +45,24 @@ for noticia in noticias:
     noticia["termos_hidricos"] = ", ".join(analise_relevancia["termos_hidricos"])
     noticia["termos_exclusao"] = ", ".join(analise_relevancia["termos_exclusao"])
 
+    analise_risco = analisar_risco(
+        texto=noticia["texto_limpo"],
+        relevante_pcj=noticia["relevante_pcj"]
+    )
+
+    noticia["categoria"] = analise_risco["categoria"]
+    noticia["evento_principal"] = analise_risco["evento_principal"]
+    noticia["nivel_risco"] = analise_risco["nivel_risco"]
+    noticia["justificativa_risco"] = analise_risco["justificativa_risco"]
+    noticia["metodo_classificacao"] = analise_risco["metodo_classificacao"]
+
     print(f"Relevante PCJ: {noticia['relevante_pcj']}")
     print(f"Termos PCJ encontrados: {noticia['termos_pcj']}")
     print(f"Termos hídricos encontrados: {noticia['termos_hidricos']}")
     print(f"Termos de exclusão encontrados: {noticia['termos_exclusao']}")
+    print(f"Categoria: {noticia['categoria']}")
+    print(f"Evento principal: {noticia['evento_principal']}")
+    print(f"Nível de risco: {noticia['nivel_risco']}")
     print("-" * 60)
 
 noticias_relevantes = [
