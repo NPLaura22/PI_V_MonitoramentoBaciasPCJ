@@ -5,6 +5,7 @@ from src.collectors.news_extractor import NewsExtractor
 from src.config.settings import RAW_DATA_DIR
 from src.processing.relevance_filter import explicar_relevancia_pcj
 from src.utils.file_handler import salvar_csv
+from src.processing.cleaner import limpar_texto_noticia
 
 
 coletor = BS4Collector(
@@ -29,9 +30,13 @@ for noticia in noticias:
     noticia["texto_original"] = dados_extraidos["texto_original"]
     noticia["erro_extracao"] = dados_extraidos["erro_extracao"]
 
+    noticia["texto_limpo"] = limpar_texto_noticia(
+        noticia["texto_original"]
+    )
+
     analise_relevancia = explicar_relevancia_pcj(
         titulo=noticia["titulo"],
-        texto_original=noticia["texto_original"]
+        texto_original=noticia["texto_limpo"]
     )
 
     noticia["relevante_pcj"] = analise_relevancia["relevante"]
@@ -61,6 +66,7 @@ for noticia in noticias:
     print(f"Título: {noticia['titulo']}")
     print(f"URL: {noticia['url']}")
     print(f"Tem texto extraído: {noticia['texto_original'] is not None}")
+    print(f"Tem texto limpo: {bool(noticia['texto_limpo'])}")
     print(f"Relevante PCJ: {noticia['relevante_pcj']}")
     print("-" * 60)
 
