@@ -7,6 +7,7 @@ from src.processing.cleaner import limpar_texto_noticia
 from src.processing.relevance_filter import explicar_relevancia_pcj
 from src.nlp.risk_classifier import analisar_risco
 from src.utils.file_handler import salvar_csv
+from src.processing.occurrence_formatter import padronizar_ocorrencia
 
 
 def processar_noticia(noticia, extrator):
@@ -76,11 +77,13 @@ def executar_pipeline():
             extrator=extrator
         )
 
-        noticias_processadas.append(noticia_processada)
+        noticia_padronizada = padronizar_ocorrencia(noticia_processada)
 
-        print(f"Relevante PCJ: {noticia_processada['relevante_pcj']}")
-        print(f"Categoria: {noticia_processada['categoria']}")
-        print(f"Nível de risco: {noticia_processada['nivel_risco']}")
+        noticias_processadas.append(noticia_padronizada)
+
+        print(f"Relevante PCJ: {noticia_padronizada['relevante_pcj']}")
+        print(f"Categoria: {noticia_padronizada['categoria']}")
+        print(f"Nível de risco: {noticia_padronizada['nivel_risco']}")
         print("-" * 60)
 
     noticias_relevantes = [

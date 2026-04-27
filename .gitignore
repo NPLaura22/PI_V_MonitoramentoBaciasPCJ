@@ -32,3 +32,4 @@ data/samples/*
 
 # Credenciais Google Cloud
 *.json
+credentials/
