@@ -12,9 +12,10 @@ from sentence_transformers import SentenceTransformer, util
 _modelo = None
 
 # Limiar mínimo para considerar uma notícia relevante para PCJ.
-# A notícia precisa superar esse score para ser marcada como relevante,
-# mesmo que vença a categoria "irrelevante". Isso evita falsos positivos.
-LIMIAR_RELEVANCIA = 0.38
+# Aumentado de 0.38 para 0.42 para reduzir falsos positivos.
+# Notícias sobre culinária, futebol, política e crimes sem relação
+# com água estavam sendo marcadas como relevantes com o limiar anterior.
+LIMIAR_RELEVANCIA = 0.42
 
 
 def carregar_modelo():
@@ -28,7 +29,8 @@ def carregar_modelo():
 
 # ---------------------------------------------------------------------------
 # Âncoras de relevância PCJ
-# Foco exclusivo em eventos hídricos nas bacias PCJ — não apenas mencionar Campinas
+# Foco exclusivo em eventos hídricos nas bacias PCJ
+# Âncoras de irrelevante reforçadas para cobrir falsos positivos observados
 # ---------------------------------------------------------------------------
 
 ANCORAS_RELEVANCIA = {
@@ -45,20 +47,31 @@ ANCORAS_RELEVANCIA = {
         "rio transbordou e causou inundação em município monitorado pelas bacias PCJ",
         "contaminação ou despejo ilegal detectado em manancial que abastece a bacia PCJ",
         "análise técnica aponta alteração na qualidade da água dos rios Piracicaba ou Jundiaí",
+        "alerta meteorológico de chuva intensa com risco de alagamento em município das bacias PCJ",
+        "monitoramento hídrico indica queda no nível dos rios da bacia Piracicaba Capivari Jundiaí",
     ],
     "irrelevante": [
         "festival de gastronomia, show musical ou evento cultural em Campinas",
         "política nacional, declaração de político ou resultado de eleição",
-        "operação policial, tráfico de drogas ou crime sem relação com água",
+        "operação policial, tráfico de drogas ou crime violento sem relação com água",
         "acidente de trânsito, queda de poste ou problema de infraestrutura elétrica",
         "petróleo, combustível, mercado financeiro ou inflação econômica",
         "saúde pública, vacina, hospital ou tratamento médico sem relação com água",
-        "esporte, futebol, campeonato ou resultado de jogo",
-        "educação, universidade, vestibular ou concurso público",
-        "tecnologia, startup, inteligência artificial ou lançamento de produto",
-        "caminhão cai em córrego ou acidente de carro sem impacto hídrico",
+        "esporte, futebol, campeonato, Copa do Mundo ou resultado de jogo",
+        "educação, universidade, vestibular, concurso público ou escola",
+        "tecnologia, startup, inteligência artificial ou lançamento de produto digital",
         "obra urbana, reforma de praça ou inauguração de equipamento público",
         "notícia sobre empresa, negócios locais ou empreendedorismo",
+        "receita culinária, gastronomia, restaurante ou alimento",
+        "qualidade de vida no ranking de cidades, premiação ou homenagem municipal",
+        "morte, homicídio, assassinato ou crime sem envolvimento de recurso hídrico",
+        "produto de limpeza, detergente, sabão ou cosmético doméstico",
+        "bancário, financeiro, IPTU, imposto ou tributo municipal",
+        "sequestro, roubo, furto ou golpe financeiro sem relação com meio ambiente",
+        "INSS, aposentadoria, benefício social ou previdência",
+        "imóvel, construção civil, incorporadora ou mercado imobiliário",
+        "vagas de emprego, concurso ou contratação de funcionários",
+        "animais domésticos, pets ou fauna silvestre sem relação com mananciais",
     ],
 }
 
@@ -202,7 +215,7 @@ def classificar_relevancia(titulo: str, texto: str = "") -> dict:
     """
     Decide se uma notícia é relevante para as Bacias PCJ.
     Exige que o score de relevante supere o de irrelevante E esteja
-    acima do limiar mínimo para evitar falsos positivos.
+    acima do limiar mínimo (0.42) para evitar falsos positivos.
     """
     modelo = carregar_modelo()
     texto_completo = f"{titulo}. {texto}".strip()

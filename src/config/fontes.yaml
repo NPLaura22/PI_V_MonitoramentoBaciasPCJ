@@ -1,24 +1,366 @@
 fontes:
+
+  # ============================================================
+  # FONTES INSTITUCIONAIS PCJ
+  # ============================================================
+
   - nome: "Agencia PCJ"
     url_base: "https://agencia.baciaspcj.org.br/"
     tipo: "site"
     ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticia/", "/noticias/", "/?p="]
     observacao: "Fonte institucional relacionada às Bacias PCJ."
 
   - nome: "Comites PCJ"
     url_base: "https://www.comitespcj.org.br/"
     tipo: "site"
     ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticia/", "/noticias/", "/?p="]
     observacao: "Fonte institucional dos Comitês PCJ."
+
+  - nome: "CEMADEN"
+    url_base: "https://www.gov.br/cemaden/pt-br/assuntos/noticias-cemaden"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias-cemaden/", "/noticia/"]
+    observacao: "Alertas e monitoramento de desastres naturais."
+
+  # ============================================================
+  # SITES NOTICIOSOS — G1 REGIONAIS
+  # ============================================================
 
   - nome: "G1 Campinas e Regiao"
     url_base: "https://g1.globo.com/sp/campinas-regiao/"
     tipo: "site"
     ativa: true
+    padrao_noticia: "extension"
+    termos_noticia: [".ghtml"]
     observacao: "Portal regional com notícias sobre Campinas e região."
 
-  - nome: "CEMADEN"
-    url_base: "https://www.gov.br/cemaden/"
+  - nome: "G1 Piracicaba e Regiao"
+    url_base: "https://g1.globo.com/sp/piracicaba-regiao/"
     tipo: "site"
     ativa: true
-    observacao: "Fonte relacionada a alertas e monitoramento de desastres naturais."
+    padrao_noticia: "extension"
+    termos_noticia: [".ghtml"]
+    observacao: "Portal regional com notícias sobre Piracicaba e região."
+
+  - nome: "G1 Sorocaba e Jundiai"
+    url_base: "https://g1.globo.com/sp/sorocaba-jundiai/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "extension"
+    termos_noticia: [".ghtml"]
+    observacao: "Portal regional com notícias sobre Sorocaba e Jundiaí."
+
+  - nome: "G1 Vale do Paraiba"
+    url_base: "https://g1.globo.com/sp/vale-do-paraiba-regiao/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "extension"
+    termos_noticia: [".ghtml"]
+    observacao: "Portal regional com notícias sobre o Vale do Paraíba."
+
+  - nome: "G1 Sul de Minas"
+    url_base: "https://g1.globo.com/mg/sul-de-minas/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "extension"
+    termos_noticia: [".ghtml"]
+    observacao: "Portal regional com notícias sobre o Sul de Minas."
+
+  # ============================================================
+  # SITES NOTICIOSOS — PORTAIS REGIONAIS PCJ
+  # ============================================================
+
+  - nome: "Folha de Piracicaba"
+    url_base: "https://folhadepiracicaba.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Jornal regional de Piracicaba."
+
+  - nome: "A Cidade On Campinas"
+    url_base: "https://www.acidadeon.com/campinas/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/campinas/"]
+    observacao: "Portal de notícias de Campinas."
+
+  - nome: "Jornal de Campinas"
+    url_base: "https://jornaldecampinas.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Jornal regional de Campinas."
+
+  - nome: "Sampi Piracicaba"
+    url_base: "https://sampi.net.br/piracicaba"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/piracicaba/"]
+    observacao: "Portal de notícias de Piracicaba."
+
+  - nome: "Hora Campinas"
+    url_base: "https://horacampinas.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Campinas."
+
+  - nome: "Portal de Americana"
+    url_base: "https://portaldeamericana.com/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Americana."
+
+  - nome: "Carta Campinas"
+    url_base: "https://cartacampinas.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Campinas."
+
+  - nome: "Gazeta de Piracicaba"
+    url_base: "http://www.gazetadepiracicaba.com.br"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Jornal regional de Piracicaba."
+
+  - nome: "Jundiai Agora"
+    url_base: "http://jundiagora.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Jundiaí."
+
+  - nome: "Diario SBO"
+    url_base: "https://diariosbo.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias regional."
+
+  - nome: "Capivari Online"
+    url_base: "https://capivarionline.com.br"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Capivari."
+
+  - nome: "Portal Paulinia"
+    url_base: "https://portalpaulinia.com/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias de Paulínia."
+
+  # ============================================================
+  # SITES DE ÓRGÃOS DE GOVERNO / TEMÁTICOS
+  # ============================================================
+
+  - nome: "CETESB"
+    url_base: "https://cetesb.sp.gov.br/noticias/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Companhia Ambiental do Estado de São Paulo."
+
+  - nome: "ANA Agencia Nacional de Aguas"
+    url_base: "https://www.gov.br/ana/pt-br/assuntos/noticias-e-eventos/noticias"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticias-e-eventos/"]
+    observacao: "Agência Nacional de Águas e Saneamento Básico."
+
+  - nome: "Agencia Brasil"
+    url_base: "https://agenciabrasil.ebc.com.br/meio-ambiente"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticia/", "/noticias/"]
+    observacao: "Agência de notícias pública federal — seção meio ambiente."
+
+  - nome: "Agencia SP"
+    url_base: "https://www.agenciasp.sp.gov.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Agência de notícias do Governo do Estado de SP."
+
+  - nome: "Ecodebate"
+    url_base: "https://www.ecodebate.com.br"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal temático sobre meio ambiente."
+
+  - nome: "Oeco"
+    url_base: "https://oeco.org.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de jornalismo ambiental."
+
+  - nome: "Envolverde"
+    url_base: "https://envolverde.com.br/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p=", "/20"]
+    observacao: "Portal de notícias socioambientais."
+
+  - nome: "Observatorio das Aguas"
+    url_base: "https://observatoriodasaguas.org.br/noticias/"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Observatório temático sobre recursos hídricos."
+
+  - nome: "Climatempo"
+    url_base: "https://www.climatempo.com.br/noticia"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticia/", "/noticias/"]
+    observacao: "Portal de meteorologia — alertas de chuva e seca."
+
+  - nome: "SIGRH SP"
+    url_base: "http://www.sigrh.sp.gov.br/sigrh/baseconteudo/noticias/index.php"
+    tipo: "site"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "noticia", "id="]
+    observacao: "Sistema de Informações para Gerenciamento de Recursos Hídricos de SP."
+
+  # ============================================================
+  # PREFEITURAS DAS BACIAS PCJ
+  # URLs corrigidas após teste — 404 e SSL removidos ou ajustados
+  # ============================================================
+
+  - nome: "Prefeitura de Campinas"
+    url_base: "https://www.campinas.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Maior município das Bacias PCJ."
+
+  - nome: "Prefeitura de Piracicaba"
+    url_base: "https://www.piracicaba.sp.gov.br/governo/secretarias/comunicacao/noticias"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/comunicacao/"]
+    observacao: "Município sede das Bacias PCJ — URL corrigida."
+
+  - nome: "Prefeitura de Jundiai"
+    url_base: "https://www.jundiai.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Americana"
+    url_base: "http://www.americana.sp.gov.br/americanaV6/noticias.php"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias", "noticia", "id="]
+    observacao: "Município das Bacias PCJ — usando HTTP por erro SSL no HTTPS."
+
+  - nome: "Prefeitura de Limeira"
+    url_base: "https://www.limeira.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Atibaia"
+    url_base: "https://www.atibaia.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Braganca Paulista"
+    url_base: "https://www.braganca.sp.gov.br/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Município das Bacias PCJ — acessando raiz por erro 500 em /noticias/."
+
+  - nome: "Prefeitura de Indaiatuba"
+    url_base: "https://www.indaiatuba.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Sumare"
+    url_base: "https://www.sumare.sp.gov.br/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Município das Bacias PCJ — URL raiz por 404 em /noticias/."
+
+  - nome: "Prefeitura de Itatiba"
+    url_base: "https://www.itatiba.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Paulinia"
+    url_base: "https://www.paulinia.sp.gov.br/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/", "/?p="]
+    observacao: "Município das Bacias PCJ — URL raiz por 404 em /noticias/."
+
+  - nome: "Prefeitura de Rio Claro"
+    url_base: "https://www.rioclaro.sp.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ."
+
+  - nome: "Prefeitura de Extrema MG"
+    url_base: "https://www.extrema.mg.gov.br/noticias/"
+    tipo: "prefeitura"
+    ativa: true
+    padrao_noticia: "path_contains"
+    termos_noticia: ["/noticias/", "/noticia/"]
+    observacao: "Município das Bacias PCJ em MG."

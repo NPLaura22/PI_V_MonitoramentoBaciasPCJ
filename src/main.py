@@ -1,7 +1,9 @@
 from datetime import datetime
 import os
 
+import yaml
 from dotenv import load_dotenv
+
 from src.database.bigquery_client import BigQueryClient
 from src.collectors.bs4_collector import BS4Collector
 from src.collectors.news_extractor import NewsExtractor
@@ -13,6 +15,24 @@ from src.utils.file_handler import salvar_csv
 from src.processing.occurrence_formatter import padronizar_ocorrencia
 
 load_dotenv()
+
+
+def carregar_fontes_ativas():
+    """
+    Lê o fontes.yaml e retorna apenas as fontes com ativa: true.
+    """
+    caminho_yaml = os.path.join(
+        os.path.dirname(__file__),
+        "config",
+        "fontes.yaml"
+    )
+
+    with open(caminho_yaml, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    fontes = [f for f in config.get("fontes", []) if f.get("ativa", False)]
+    print(f"Fontes ativas carregadas: {len(fontes)}")
+    return fontes
 
 
 def processar_noticia(noticia, extrator):
@@ -27,9 +47,6 @@ def processar_noticia(noticia, extrator):
     noticia["texto_limpo"] = limpar_texto_noticia(noticia["texto_original"])
 
     # --- Relevância PCJ via embeddings ---
-    # explicar_relevancia_pcj retorna:
-    #   relevante, termos_pcj, termos_hidricos, termos_exclusao (listas vazias — substituídas por embeddings)
-    #   confianca_relevante, confianca_irrelevante, margem, metodo_relevancia
     analise_relevancia = explicar_relevancia_pcj(
         titulo=noticia["titulo"],
         texto_original=noticia["texto_limpo"]
@@ -40,7 +57,7 @@ def processar_noticia(noticia, extrator):
     noticia["termos_hidricos"] = ", ".join(analise_relevancia["termos_hidricos"])
     noticia["termos_exclusao"] = ", ".join(analise_relevancia["termos_exclusao"])
 
-    # Campos de rastreabilidade dos embeddings — propagados para o formatter
+    # Campos de rastreabilidade dos embeddings
     noticia["confianca_relevante"] = analise_relevancia["confianca_relevante"]
     noticia["confianca_irrelevante"] = analise_relevancia["confianca_irrelevante"]
     noticia["margem"] = analise_relevancia["margem"]
@@ -62,38 +79,51 @@ def processar_noticia(noticia, extrator):
 
 
 def executar_pipeline():
-    coletor = BS4Collector(
-        nome_fonte="G1 Campinas e Regiao",
-        url_base="https://g1.globo.com/sp/campinas-regiao/"
-    )
-
+    fontes = carregar_fontes_ativas()
     extrator = NewsExtractor()
-    noticias = coletor.coletar()
     noticias_processadas = []
+    total_coletadas = 0
 
-    print(f"Total de possíveis notícias coletadas: {len(noticias)}")
-    print("-" * 60)
+    print("=" * 60)
 
-    for noticia in noticias:
-        print(f"Processando: {noticia['titulo']}")
+    for fonte in fontes:
+        print(f"\nColetando: {fonte['nome']}")
 
-        noticia_processada = processar_noticia(noticia=noticia, extrator=extrator)
-        noticia_padronizada = padronizar_ocorrencia(noticia_processada)
-        noticias_processadas.append(noticia_padronizada)
+        coletor = BS4Collector(
+            nome_fonte=fonte["nome"],
+            url_base=fonte["url_base"],
+            padrao_noticia=fonte.get("padrao_noticia", "path_contains"),
+            termos_noticia=fonte.get("termos_noticia", ["/noticias/", "/noticia/"])
+        )
 
-        print(f"  Relevante PCJ:        {noticia_padronizada['relevante_pcj']}")
-        print(f"  Confiança relevante:  {noticia_padronizada['confianca_relevante']}")
-        print(f"  Confiança irrel.:     {noticia_padronizada['confianca_irrelevante']}")
-        print(f"  Margem:               {noticia_padronizada['margem_relevancia']}")
-        print(f"  Categoria:            {noticia_padronizada['categoria']}")
-        print(f"  Nível de risco:       {noticia_padronizada['nivel_risco']}")
-        print("-" * 60)
+        noticias = coletor.coletar()
+        total_coletadas += len(noticias)
+        print(f"  {len(noticias)} notícias encontradas")
 
+        for noticia in noticias:
+            print(f"  Processando: {noticia['titulo'][:70]}...")
+
+            try:
+                noticia_processada = processar_noticia(noticia=noticia, extrator=extrator)
+                noticia_padronizada = padronizar_ocorrencia(noticia_processada)
+                noticias_processadas.append(noticia_padronizada)
+
+                print(f"    Relevante: {noticia_padronizada['relevante_pcj']} | "
+                      f"Categoria: {noticia_padronizada['categoria']} | "
+                      f"Risco: {noticia_padronizada['nivel_risco']}")
+
+            except Exception as e:
+                print(f"    Erro ao processar notícia: {e}")
+                continue
+
+    print("\n" + "=" * 60)
     noticias_relevantes = [n for n in noticias_processadas if n["relevante_pcj"]]
 
-    print(f"Total processado:          {len(noticias_processadas)}")
-    print(f"Total relevante para PCJ:  {len(noticias_relevantes)}")
-    print("-" * 60)
+    print(f"Total de fontes processadas:  {len(fontes)}")
+    print(f"Total de notícias coletadas:  {total_coletadas}")
+    print(f"Total processado:             {len(noticias_processadas)}")
+    print(f"Total relevante para PCJ:     {len(noticias_relevantes)}")
+    print("=" * 60)
 
     data_execucao = datetime.now().strftime("%Y%m%d_%H%M%S")
     caminho_saida_bruto = RAW_DATA_DIR / f"pipeline_bruto_{data_execucao}.csv"
@@ -105,7 +135,7 @@ def executar_pipeline():
     enviar_para_bigquery = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
 
     if enviar_para_bigquery:
-        print("Enviando dados para o BigQuery...")
+        print("\nEnviando dados para o BigQuery...")
         try:
             bq = BigQueryClient()
             bq.criar_dataset_se_nao_existir()
@@ -116,7 +146,7 @@ def executar_pipeline():
             print(f"Erro ao enviar para BigQuery: {e}")
             print("Os dados foram salvos localmente em data/raw/")
     else:
-        print("Envio para BigQuery desativado no .env.")
+        print("\nEnvio para BigQuery desativado no .env.")
         print(f"Dados salvos em: {caminho_saida_bruto}")
 
 
