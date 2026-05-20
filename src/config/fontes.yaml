@@ -1,0 +1,24 @@
+fontes:
+  - nome: "Agencia PCJ"
+    url_base: "https://agencia.baciaspcj.org.br/"
+    tipo: "site"
+    ativa: true
+    observacao: "Fonte institucional relacionada às Bacias PCJ."
+
+  - nome: "Comites PCJ"
+    url_base: "https://www.comitespcj.org.br/"
+    tipo: "site"
+    ativa: true
+    observacao: "Fonte institucional dos Comitês PCJ."
+
+  - nome: "G1 Campinas e Regiao"
+    url_base: "https://g1.globo.com/sp/campinas-regiao/"
+    tipo: "site"
+    ativa: true
+    observacao: "Portal regional com notícias sobre Campinas e região."
+
+  - nome: "CEMADEN"
+    url_base: "https://www.gov.br/cemaden/"
+    tipo: "site"
+    ativa: true
+    observacao: "Fonte relacionada a alertas e monitoramento de desastres naturais."

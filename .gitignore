@@ -1,0 +1,35 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variáveis de ambiente
+.env
+
+# Arquivos locais
+data/raw/*
+data/processed/*
+data/samples/*
+
+# Manter as pastas data no Git
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/samples/.gitkeep
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Credenciais Google Cloud
+*.json
+credentials/

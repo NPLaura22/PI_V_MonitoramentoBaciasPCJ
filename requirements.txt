@@ -1,0 +1,17 @@
+beautifulsoup4
+requests
+pandas
+numpy
+python-dotenv
+feedparser
+google-cloud-bigquery
+pandas-gbq
+transformers
+sentence-transformers
+torch
+bertopic
+scikit-learn
+spacy
+dateparser
+lxml
+pyyaml
