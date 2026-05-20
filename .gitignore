@@ -32,4 +32,5 @@ data/samples/*
 
 # Credenciais Google Cloud
 *.json
-credentials/
+credentials/*
+!credentials/.gitkeep
