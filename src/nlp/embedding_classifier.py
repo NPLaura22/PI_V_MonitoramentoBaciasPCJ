@@ -11,10 +11,7 @@ from sentence_transformers import SentenceTransformer, util
 
 _modelo = None
 
-# Limiar mínimo para considerar uma notícia relevante para PCJ.
-# Aumentado de 0.38 para 0.42 para reduzir falsos positivos.
-# Notícias sobre culinária, futebol, política e crimes sem relação
-# com água estavam sendo marcadas como relevantes com o limiar anterior.
+# Limiar mínimo para considerar uma notícia relevante para PCJ
 LIMIAR_RELEVANCIA = 0.42
 
 
