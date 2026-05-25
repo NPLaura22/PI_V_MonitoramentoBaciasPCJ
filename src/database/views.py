@@ -89,7 +89,21 @@ SELECT
 
   justificativa_risco,
   metodo_classificacao,
-  data_processamento
+  data_processamento,
+
+  CASE
+  WHEN LOWER(fonte_nome) LIKE '%extrema%' THEN 'Extrema'
+  WHEN LOWER(fonte_nome) LIKE '%campinas%' THEN 'Campinas'
+  WHEN LOWER(fonte_nome) LIKE '%jundiai%' THEN 'Jundiaí'
+  WHEN LOWER(fonte_nome) LIKE '%piracicaba%' THEN 'Piracicaba'
+  WHEN LOWER(fonte_nome) LIKE '%rio claro%' THEN 'Rio Claro'
+  WHEN LOWER(fonte_nome) LIKE '%americana%' THEN 'Americana'
+  WHEN LOWER(fonte_nome) LIKE '%limeira%' THEN 'Limeira'
+  WHEN LOWER(fonte_nome) LIKE '%sorocaba%' THEN 'Sorocaba'
+  WHEN LOWER(fonte_nome) LIKE '%indaiatuba%' THEN 'Indaiatuba'
+  WHEN LOWER(fonte_nome) LIKE '%atibaia%' THEN 'Atibaia'
+  ELSE 'Não identificado'
+END AS municipio
 FROM deduplicado
 WHERE rn = 1
 """
@@ -117,6 +131,7 @@ SELECT
     WHEN 'monitoramento_hidrico' THEN 'Monitoramento Hídrico'
     ELSE 'Outros'
   END AS categoria_label,
+  municipio,
   evento_principal,
   nivel_risco,
   CASE nivel_risco
