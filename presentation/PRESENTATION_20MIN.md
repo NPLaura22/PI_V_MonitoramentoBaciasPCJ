@@ -151,10 +151,10 @@ Abordagem 2 — Embeddings (o que usamos):
 
 **Vantagem:** Entende contexto e variações.
 
-Modelo usado: `paraphrase-multilingual-MiniLM-L12-v2` (Hugging Face)
-- Treina em 50+ idiomas
-- 384 dimensões
-- Rápido (CPU-friendly)
+Modelo usado: `paraphrase-multilingual-mpnet-base-v2` (Hugging Face)
+- Pré-treinado em 50+ idiomas
+- 384 dimensões (espaço semântico)
+- MPNet: 100M+ parâmetros
 
 **Exemplo:**
 ```
@@ -171,11 +171,14 @@ Modelo usado: `paraphrase-multilingual-MiniLM-L12-v2` (Hugging Face)
 - Entrada: título + texto limpo
 - Saída: True/False (é relevante para PCJ?)
 
-Implementação híbrida:
-- 1️⃣ Busca termos geográficos ('PCJ', 'Piracicaba', 'Campinas', etc)
-- 2️⃣ Busca termos hídricos ('enchente', 'seca', 'contaminação', etc)
-- 3️⃣ Se encontrados, valida com embeddings (contexto semântico)
-- 4️⃣ Evita falsos positivos com lista de exclusão ('mega-sena', 'futebol')
+Implementação 100% com IA:
+- 1️⃣ Gera embedding (vetor semântico) da notícia
+- 2️⃣ Calcula similaridade com 30+ âncoras 'relevante'
+- 3️⃣ Calcula similaridade com 20+ âncoras 'irrelevante'
+- 4️⃣ Se score_relevante > score_irrelevante E > limiar (0.40):
+   → Relevante ✓ com confiança
+   Senão:
+   → Irrelevante ✗
 
 Resultado: `relevante_pcj = True/False` + `confianca (0.0-1.0)`
 
