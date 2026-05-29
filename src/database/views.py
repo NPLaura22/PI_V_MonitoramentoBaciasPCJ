@@ -181,7 +181,7 @@ SELECT
   categoria,
   categoria_label,
   COUNT(*)                                       AS total_ocorrencias,
-  COUNTIF(relevante_pcj = TRUE)                  AS total_relevantes,
+  COUNTIF(relevante_pcj = TRUE)                  AS total_relevantes_pcj,
   ROUND(AVG(nivel_risco), 2)                     AS media_risco,
   MAX(nivel_risco)                               AS risco_maximo,
   ROUND(AVG(confianca_relevante), 4)             AS media_confianca,

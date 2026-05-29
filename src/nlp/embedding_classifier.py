@@ -5,34 +5,58 @@ Motor central de classificação semântica por embeddings.
 Zero-shot por similaridade de cosseno com âncoras calibradas.
 
 Modelo: paraphrase-multilingual-mpnet-base-v2
+
+Otimização de desempenho:
+    - classificar_relevancia_batch(): processa todas as notícias de uma vez
+    - classificar_categoria_e_risco_batch(): processa todas de uma vez
+    O batch é muito mais rápido que processar uma por vez porque o modelo
+    aproveita operações vetorizadas na GPU/CPU de forma eficiente.
 """
 
+import torch
 from sentence_transformers import SentenceTransformer, util
 
 _modelo = None
+_cache_ancoras = {}  # cache dos embeddings das âncoras
 
-# Limiar mínimo para considerar uma notícia relevante para PCJ
 LIMIAR_RELEVANCIA = 0.40
+NOME_MODELO = "paraphrase-multilingual-mpnet-base-v2"
+
+# Tamanho do lote para encode — ajuste conforme memória disponível
+BATCH_SIZE = 64
 
 
 def carregar_modelo():
     global _modelo
     if _modelo is None:
-        print("[embeddings] Carregando modelo de linguagem...")
-        _modelo = SentenceTransformer("paraphrase-multilingual-mpnet-base-v2")
+        print(f"[embeddings] Carregando modelo {NOME_MODELO}...")
+        _modelo = SentenceTransformer(NOME_MODELO)
         print("[embeddings] Modelo carregado.")
     return _modelo
 
 
+def _embeddings_ancoras(chave, ancoras):
+    """
+    Retorna embeddings das âncoras com cache.
+    As âncoras não mudam entre execuções, então calculamos uma vez e reutilizamos.
+    """
+    if chave not in _cache_ancoras:
+        modelo = carregar_modelo()
+        _cache_ancoras[chave] = modelo.encode(
+            ancoras,
+            convert_to_tensor=True,
+            batch_size=BATCH_SIZE,
+            show_progress_bar=False,
+        )
+    return _cache_ancoras[chave]
+
+
 # ---------------------------------------------------------------------------
 # Âncoras de relevância PCJ
-# Foco exclusivo em eventos hídricos nas bacias PCJ
-# Âncoras de irrelevante reforçadas para cobrir falsos positivos observados
 # ---------------------------------------------------------------------------
 
 ANCORAS_RELEVANCIA = {
     "relevante": [
-        # --- Linguagem jornalística ---
         "nível do rio Piracicaba, Capivari ou Jundiaí subiu ou caiu de forma crítica",
         "reservatório das bacias PCJ está abaixo da capacidade por estiagem",
         "enchente ou alagamento causado por chuva intensa na região de Campinas",
@@ -46,8 +70,6 @@ ANCORAS_RELEVANCIA = {
         "contaminação ou despejo ilegal detectado em manancial que abastece a bacia PCJ",
         "alerta meteorológico de chuva intensa com risco de alagamento em município PCJ",
         "monitoramento hídrico indica queda no nível dos rios da bacia Piracicaba Capivari Jundiaí",
-
-        # --- Linguagem técnica PCJ ---
         "cota de inundação ultrapassada no rio Piracicaba ou afluente das bacias PCJ",
         "volume útil do Sistema Cantareira ou reservatórios PCJ abaixo do limite crítico",
         "pluviometria acima da média histórica provoca alerta hidrológico nas bacias PCJ",
@@ -90,11 +112,6 @@ ANCORAS_RELEVANCIA = {
     ],
 }
 
-
-# ---------------------------------------------------------------------------
-# Âncoras de categoria
-# ---------------------------------------------------------------------------
-
 ANCORAS_CATEGORIA = {
     "enchente_alagamento": [
         "rio transbordou e inundou ruas e casas de moradores ribeirinhos",
@@ -104,7 +121,6 @@ ANCORAS_CATEGORIA = {
         "defesa civil evacua moradores de área de risco por risco de alagamento",
         "chuva torrencial causa transbordamento de rio e inunda cidade",
         "nível do rio subiu acima da cota de inundação e afetou residências",
-        # Técnico
         "nível d'água ultrapassou a cota de transbordamento nas estações de monitoramento",
         "planície de inundação atingida por enchente com famílias em abrigos temporários",
         "áreas ribeirinhas dos rios Piracicaba ou Capivari alagadas por cheia histórica",
@@ -118,7 +134,6 @@ ANCORAS_CATEGORIA = {
         "reservatório atinge volume mínimo histórico por período sem precipitação",
         "estiagem compromete irrigação agrícola e abastecimento urbano da região",
         "nível dos mananciais cai ao menor patamar em anos por falta de chuva",
-        # Técnico
         "vazão mínima de referência Q7,10 comprometida por período de estiagem severa",
         "volume útil dos reservatórios das bacias PCJ abaixo de 30% da capacidade",
         "pluviometria acumulada no trimestre inferior a 40% da média histórica esperada",
@@ -132,7 +147,6 @@ ANCORAS_CATEGORIA = {
         "mancha de óleo ou produto químico tóxico detectada nas águas do rio",
         "despejo ilegal de resíduos tóxicos contamina córrego e afluentes da bacia",
         "odor forte e coloração alterada da água indicam poluição no rio",
-        # Técnico
         "DBO acima do limite estabelecido pela resolução CONAMA 357 em trecho monitorado",
         "coliformes fecais detectados acima do valor máximo permitido para captação",
         "CETESB autuou indústria por lançamento de efluente sem tratamento em rio PCJ",
@@ -147,7 +161,6 @@ ANCORAS_CATEGORIA = {
         "rodízio de água é adotado para economizar reservas dos mananciais",
         "crise hídrica força restrição severa no uso e distribuição de água",
         "sistema de abastecimento colapsa por baixo nível crítico dos reservatórios",
-        # Técnico
         "SABESP ou SANASA reduz pressão de distribuição por baixo nível nos mananciais",
         "sistema produtor de água opera abaixo da capacidade nominal por estiagem",
         "concessionária implanta rodízio por impossibilidade de manter fornecimento contínuo",
@@ -162,7 +175,6 @@ ANCORAS_CATEGORIA = {
         "sirenes de emergência são acionadas em área de risco por chuva intensa",
         "meteorologistas preveem temporal severo com risco de inundação nas próximas horas",
         "autoridades recomendam evacuação preventiva de áreas ribeirinhas de risco",
-        # Técnico
         "CEMADEN emite aviso de chuva intensa com acumulado previsto acima de 50mm em 24h",
         "alerta hidrológico emitido pelo sistema de monitoramento das bacias PCJ",
         "INMET emite alerta laranja de tempestade com risco de alagamento para municípios PCJ",
@@ -177,7 +189,6 @@ ANCORAS_CATEGORIA = {
         "agência ambiental coleta amostras de água para análise laboratorial de rotina",
         "boletim técnico indica situação hídrica estável sem alertas ativos",
         "medição de vazão dos rios aponta tendência de queda no período de seca",
-        # Técnico
         "boletim de acompanhamento do Sistema Cantareira divulgado pela SABESP e ANA",
         "relatório de monitoramento da qualidade da água das bacias PCJ publicado pela CETESB",
         "rede de monitoramento hidrológico das bacias PCJ registra dados de vazão e nível",
@@ -197,11 +208,6 @@ ANCORAS_CATEGORIA = {
     ],
 }
 
-
-# ---------------------------------------------------------------------------
-# Âncoras de nível de risco (0 a 5)
-# ---------------------------------------------------------------------------
-
 ANCORAS_NIVEL_RISCO = {
     5: [
         "estado de calamidade pública decretado por desastre hídrico com mortes confirmadas",
@@ -209,7 +215,6 @@ ANCORAS_NIVEL_RISCO = {
         "manancial de abastecimento totalmente contaminado sem alternativa disponível",
         "interrupção completa e prolongada no abastecimento de água de toda a cidade",
         "centenas de famílias desabrigadas e mortes confirmadas por enchente severa",
-        # Técnico
         "volume do Sistema Cantareira abaixo de zero no volume morto com colapso iminente",
         "DBO ou concentração de poluente em nível incompatível com qualquer uso da água",
         "enchente ultrapassa recorrência de 100 anos com destruição generalizada da bacia",
@@ -221,7 +226,6 @@ ANCORAS_NIVEL_RISCO = {
         "sirenes acionadas e evacuação de bairro completo por risco alto de alagamento",
         "transbordamento do rio invade bairros residenciais causando danos e vítimas",
         "nível do rio ultrapassa cota de inundação e afeta centenas de moradores",
-        # Técnico
         "volume útil dos reservatórios PCJ abaixo de 10% com risco real de colapso hídrico",
         "IQA péssimo em ponto de captação exige interrupção temporária do tratamento",
         "CEMADEN emite alerta vermelho com acumulado previsto superior a 100mm em 24h",
@@ -233,7 +237,6 @@ ANCORAS_NIVEL_RISCO = {
         "racionamento de água implantado afetando parte significativa da população",
         "temporal intenso causa alagamentos localizados com danos materiais relevantes",
         "nível do rio sobe acima da cota de atenção e preocupa autoridades locais",
-        # Técnico
         "volume útil dos reservatórios PCJ entre 20% e 40% com tendência de queda",
         "INMET emite alerta laranja com acumulado previsto entre 50mm e 100mm em 24h",
         "IQA ruim registrado em ponto de captação com necessidade de tratamento adicional",
@@ -246,7 +249,6 @@ ANCORAS_NIVEL_RISCO = {
         "nível do rio levemente abaixo do normal sem risco imediato à população",
         "defesa civil em estado de observação por previsão de instabilidade climática",
         "boletim aponta situação de atenção para recursos hídricos sem emergência declarada",
-        # Técnico
         "volume útil entre 40% e 60% com tendência de queda exige acompanhamento técnico",
         "IQA regular em trecho monitorado com recomendação de aumento da vigilância",
         "CEMADEN emite alerta amarelo com acumulado previsto entre 20mm e 50mm em 24h",
@@ -258,7 +260,6 @@ ANCORAS_NIVEL_RISCO = {
         "coleta preventiva de amostras para análise da qualidade da água",
         "previsão de chuvas dentro da média histórica sem alertas ativos",
         "boletim informativo sobre condições normais dos mananciais da bacia",
-        # Técnico
         "boletim de acompanhamento indica volume útil acima de 60% sem tendência negativa",
         "IQA bom ou ótimo registrado em todos os pontos de monitoramento das bacias PCJ",
         "reunião ordinária do Comitê PCJ sem registros de situação crítica",
@@ -272,39 +273,41 @@ ANCORAS_NIVEL_RISCO = {
     ],
 }
 
+EVENTOS = {
+    "enchente_alagamento": "enchente/alagamento",
+    "estiagem_seca": "estiagem/seca",
+    "contaminacao_poluicao": "contaminação/poluição",
+    "abastecimento": "problema de abastecimento",
+    "alerta_defesa_civil": "alerta de risco",
+    "monitoramento_hidrico": "monitoramento hídrico",
+    "irrelevante": "nenhum evento hídrico identificado",
+}
+
 
 # ---------------------------------------------------------------------------
-# Funções principais
+# Funções de classificação individual (mantidas para compatibilidade)
 # ---------------------------------------------------------------------------
 
 def calcular_scores(embedding_texto, ancoras_dict):
     modelo = carregar_modelo()
     scores = {}
     for chave, ancoras in ancoras_dict.items():
-        embeddings_ancoras = modelo.encode(ancoras, convert_to_tensor=True)
-        similaridades = util.cos_sim(embedding_texto, embeddings_ancoras)
+        emb = _embeddings_ancoras(f"dict_{chave}", ancoras)
+        similaridades = util.cos_sim(embedding_texto, emb)
         scores[chave] = float(similaridades.max())
     return scores
 
 
 def classificar_relevancia(titulo: str, texto: str = "") -> dict:
-    """
-    Decide se uma notícia é relevante para as Bacias PCJ.
-    Exige que o score de relevante supere o de irrelevante E esteja
-    acima do limiar mínimo (0.42) para evitar falsos positivos.
-    """
     modelo = carregar_modelo()
     texto_completo = f"{titulo}. {texto}".strip()
     embedding = modelo.encode(texto_completo, convert_to_tensor=True)
     scores = calcular_scores(embedding, ANCORAS_RELEVANCIA)
-
     margem = round(scores["relevante"] - scores["irrelevante"], 4)
-
     relevante = (
         scores["relevante"] > scores["irrelevante"]
         and scores["relevante"] >= LIMIAR_RELEVANCIA
     )
-
     return {
         "relevante": relevante,
         "confianca_relevante": round(scores["relevante"], 4),
@@ -318,7 +321,6 @@ def classificar_categoria(texto: str) -> dict:
     embedding = modelo.encode(texto, convert_to_tensor=True)
     scores = calcular_scores(embedding, ANCORAS_CATEGORIA)
     melhor = max(scores, key=scores.get)
-
     return {
         "categoria": melhor,
         "confianca": round(scores[melhor], 4),
@@ -327,24 +329,121 @@ def classificar_categoria(texto: str) -> dict:
 
 
 def classificar_nivel_risco(texto: str, relevante_pcj: bool) -> dict:
-    """
-    Classifica o nível de risco de 0 a 5.
-    Se não for relevante para PCJ, retorna 0 diretamente.
-    """
     if not relevante_pcj:
-        return {
-            "nivel_risco": 0,
-            "confianca": 1.0,
-            "scores": {},
-        }
-
+        return {"nivel_risco": 0, "confianca": 1.0, "scores": {}}
     modelo = carregar_modelo()
     embedding = modelo.encode(texto, convert_to_tensor=True)
     scores = calcular_scores(embedding, ANCORAS_NIVEL_RISCO)
     melhor_nivel = max(scores, key=scores.get)
-
     return {
         "nivel_risco": int(melhor_nivel),
         "confianca": round(scores[melhor_nivel], 4),
         "scores": {str(k): round(v, 4) for k, v in scores.items()},
     }
+
+
+# ---------------------------------------------------------------------------
+# Funções BATCH — processam listas inteiras de uma vez (muito mais rápido)
+# ---------------------------------------------------------------------------
+
+def classificar_relevancia_batch(textos: list) -> list:
+    """
+    Classifica relevância de uma lista de textos de uma só vez.
+    Muito mais rápido que chamar classificar_relevancia() em loop.
+    """
+    if not textos:
+        return []
+
+    modelo = carregar_modelo()
+
+    # Gera todos os embeddings de uma vez em batch
+    embeddings = modelo.encode(
+        textos,
+        convert_to_tensor=True,
+        batch_size=BATCH_SIZE,
+        show_progress_bar=False,
+    )
+
+    # Embeddings das âncoras (com cache)
+    emb_relevante = _embeddings_ancoras("relevante", ANCORAS_RELEVANCIA["relevante"])
+    emb_irrelevante = _embeddings_ancoras("irrelevante", ANCORAS_RELEVANCIA["irrelevante"])
+
+    # Similaridade de todos os textos com todas as âncoras de uma vez
+    sim_relevante = util.cos_sim(embeddings, emb_relevante)   # (N, num_ancoras)
+    sim_irrelevante = util.cos_sim(embeddings, emb_irrelevante)
+
+    scores_rel = sim_relevante.max(dim=1).values.tolist()
+    scores_irr = sim_irrelevante.max(dim=1).values.tolist()
+
+    resultados = []
+    for sr, si in zip(scores_rel, scores_irr):
+        margem = round(sr - si, 4)
+        relevante = sr > si and sr >= LIMIAR_RELEVANCIA
+        resultados.append({
+            "relevante": relevante,
+            "confianca_relevante": round(sr, 4),
+            "confianca_irrelevante": round(si, 4),
+            "margem": margem,
+        })
+
+    return resultados
+
+
+def classificar_categoria_e_risco_batch(textos: list) -> list:
+    """
+    Classifica categoria e nível de risco de uma lista de textos de uma vez.
+    Só deve ser chamada para textos de notícias relevantes.
+    """
+    if not textos:
+        return []
+
+    modelo = carregar_modelo()
+
+    embeddings = modelo.encode(
+        textos,
+        convert_to_tensor=True,
+        batch_size=BATCH_SIZE,
+        show_progress_bar=False,
+    )
+
+    # Pré-calcula embeddings de todas as categorias e riscos (com cache)
+    scores_categoria = {}
+    for cat, ancoras in ANCORAS_CATEGORIA.items():
+        emb = _embeddings_ancoras(f"cat_{cat}", ancoras)
+        sim = util.cos_sim(embeddings, emb)
+        scores_categoria[cat] = sim.max(dim=1).values.tolist()
+
+    scores_risco = {}
+    for nivel, ancoras in ANCORAS_NIVEL_RISCO.items():
+        emb = _embeddings_ancoras(f"risco_{nivel}", ancoras)
+        sim = util.cos_sim(embeddings, emb)
+        scores_risco[nivel] = sim.max(dim=1).values.tolist()
+
+    resultados = []
+    for i in range(len(textos)):
+        # Melhor categoria
+        cat_scores = {cat: scores_categoria[cat][i] for cat in ANCORAS_CATEGORIA}
+        melhor_cat = max(cat_scores, key=cat_scores.get)
+        conf_cat = round(cat_scores[melhor_cat], 4)
+
+        # Melhor nível de risco
+        risco_scores = {nivel: scores_risco[nivel][i] for nivel in ANCORAS_NIVEL_RISCO}
+        melhor_risco = max(risco_scores, key=risco_scores.get)
+        conf_risco = round(risco_scores[melhor_risco], 4)
+
+        justificativa = (
+            f"Classificado por embeddings na categoria '{melhor_cat}' "
+            f"(confiança: {conf_cat:.2f}), "
+            f"com nível de risco {melhor_risco} "
+            f"(confiança: {conf_risco:.2f})."
+        )
+
+        resultados.append({
+            "categoria": melhor_cat,
+            "evento_principal": EVENTOS.get(melhor_cat, "evento hídrico"),
+            "nivel_risco": int(melhor_risco),
+            "justificativa_risco": justificativa,
+            "metodo_classificacao": f"EMBEDDING_BATCH — categoria: {conf_cat:.2f} | risco: {conf_risco:.2f}",
+        })
+
+    return resultados

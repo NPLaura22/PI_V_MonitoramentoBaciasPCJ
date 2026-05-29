@@ -1,3 +1,15 @@
+"""
+main.py
+
+Pipeline principal de monitoramento das Bacias PCJ.
+
+Otimizações de desempenho implementadas:
+    1. Coleta paralela — todas as fontes são acessadas ao mesmo tempo
+    2. Extração paralela — todas as URLs são acessadas simultaneamente
+    3. Embeddings em batch — todas as notícias processadas de uma vez pelo modelo
+"""
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import os
 
@@ -9,6 +21,11 @@ from src.collectors.bs4_collector import BS4Collector
 from src.collectors.news_extractor import NewsExtractor
 from src.config.settings import RAW_DATA_DIR
 from src.processing.cleaner import limpar_texto_noticia
+from src.nlp.embedding_classifier import (
+    carregar_modelo,
+    classificar_relevancia_batch,
+    classificar_categoria_e_risco_batch,
+)
 from src.processing.relevance_filter import explicar_relevancia_pcj
 from src.nlp.risk_classifier import analisar_risco
 from src.utils.file_handler import salvar_csv
@@ -16,17 +33,18 @@ from src.processing.occurrence_formatter import padronizar_ocorrencia
 
 load_dotenv()
 
+# Número de threads para coleta e extração paralela
+# 10 é um bom equilíbrio — mais threads pode causar bloqueios por rate limit dos sites
+MAX_WORKERS_COLETA = 10
+MAX_WORKERS_EXTRACAO = 20
+
 
 def carregar_fontes_ativas():
-    """
-    Lê o fontes.yaml e retorna apenas as fontes com ativa: true.
-    """
     caminho_yaml = os.path.join(
         os.path.dirname(__file__),
         "config",
         "fontes.yaml"
     )
-
     with open(caminho_yaml, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
@@ -35,119 +53,175 @@ def carregar_fontes_ativas():
     return fontes
 
 
-def processar_noticia(noticia, extrator):
-    # --- Extração do conteúdo ---
-    dados_extraidos = extrator.extrair(noticia["url"])
-
-    noticia["titulo_extraido"] = dados_extraidos["titulo_extraido"]
-    noticia["subtitulo"] = dados_extraidos["subtitulo"]
-    noticia["texto_original"] = dados_extraidos["texto_original"]
-    noticia["erro_extracao"] = dados_extraidos["erro_extracao"]
-
-    noticia["texto_limpo"] = limpar_texto_noticia(noticia["texto_original"])
-
-    # --- Relevância PCJ via embeddings ---
-    analise_relevancia = explicar_relevancia_pcj(
-        titulo=noticia["titulo"],
-        texto_original=noticia["texto_limpo"]
-    )
-
-    noticia["relevante_pcj"] = analise_relevancia["relevante"]
-    noticia["termos_pcj"] = ", ".join(analise_relevancia["termos_pcj"])
-    noticia["termos_hidricos"] = ", ".join(analise_relevancia["termos_hidricos"])
-    noticia["termos_exclusao"] = ", ".join(analise_relevancia["termos_exclusao"])
-
-    # Campos de rastreabilidade dos embeddings
-    noticia["confianca_relevante"] = analise_relevancia["confianca_relevante"]
-    noticia["confianca_irrelevante"] = analise_relevancia["confianca_irrelevante"]
-    noticia["margem"] = analise_relevancia["margem"]
-    noticia["metodo_relevancia"] = analise_relevancia["metodo_relevancia"]
-
-    # --- Classificação de categoria e risco via embeddings ---
-    analise_risco = analisar_risco(
-        texto=noticia["texto_limpo"],
-        relevante_pcj=noticia["relevante_pcj"]
-    )
-
-    noticia["categoria"] = analise_risco["categoria"]
-    noticia["evento_principal"] = analise_risco["evento_principal"]
-    noticia["nivel_risco"] = analise_risco["nivel_risco"]
-    noticia["justificativa_risco"] = analise_risco["justificativa_risco"]
-    noticia["metodo_classificacao"] = analise_risco["metodo_classificacao"]
-
-    return noticia
-
-
-def executar_pipeline():
-    fontes = carregar_fontes_ativas()
-    extrator = NewsExtractor()
-    noticias_processadas = []
-    total_coletadas = 0
-
-    print("=" * 60)
-
-    for fonte in fontes:
-        print(f"\nColetando: {fonte['nome']}")
-
+def coletar_fonte(fonte):
+    """Coleta links de uma única fonte. Chamado em paralelo."""
+    try:
         coletor = BS4Collector(
             nome_fonte=fonte["nome"],
             url_base=fonte["url_base"],
             padrao_noticia=fonte.get("padrao_noticia", "path_contains"),
             termos_noticia=fonte.get("termos_noticia", ["/noticias/", "/noticia/"])
         )
-
         noticias = coletor.coletar()
-        total_coletadas += len(noticias)
-        print(f"  {len(noticias)} notícias encontradas")
+        print(f"  [{fonte['nome']}] {len(noticias)} notícias encontradas")
+        return noticias
+    except Exception as e:
+        print(f"  [{fonte['nome']}] Erro na coleta: {e}")
+        return []
 
-        for noticia in noticias:
-            print(f"  Processando: {noticia['titulo'][:70]}...")
 
+def extrair_noticia(args):
+    """Extrai o conteúdo de uma notícia. Chamado em paralelo."""
+    noticia, extrator = args
+    try:
+        dados = extrator.extrair(noticia["url"])
+        noticia["titulo_extraido"] = dados["titulo_extraido"]
+        noticia["subtitulo"] = dados["subtitulo"]
+        noticia["texto_original"] = dados["texto_original"]
+        noticia["erro_extracao"] = dados["erro_extracao"]
+        noticia["texto_limpo"] = limpar_texto_noticia(noticia["texto_original"])
+        return noticia
+    except Exception as e:
+        noticia["titulo_extraido"] = None
+        noticia["subtitulo"] = None
+        noticia["texto_original"] = None
+        noticia["erro_extracao"] = str(e)
+        noticia["texto_limpo"] = ""
+        return noticia
+
+
+def executar_pipeline():
+    inicio = datetime.now()
+    fontes = carregar_fontes_ativas()
+
+    # ------------------------------------------------------------------
+    # ETAPA 1 — Coleta paralela de todas as fontes ao mesmo tempo
+    # ------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("Coletando notícias de todas as fontes em paralelo...")
+    print("=" * 60)
+
+    todas_noticias = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_COLETA) as executor:
+        resultados = executor.map(coletar_fonte, fontes)
+        for noticias in resultados:
+            todas_noticias.extend(noticias)
+
+    print(f"\nTotal coletado: {len(todas_noticias)} notícias de {len(fontes)} fontes")
+
+    # ------------------------------------------------------------------
+    # ETAPA 2 — Extração paralela do conteúdo de cada URL
+    # ------------------------------------------------------------------
+    print("\nExtraindo conteúdo das notícias em paralelo...")
+
+    extrator = NewsExtractor()
+    args = [(noticia, extrator) for noticia in todas_noticias]
+
+    noticias_extraidas = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_EXTRACAO) as executor:
+        futures = {executor.submit(extrair_noticia, arg): arg for arg in args}
+        for i, future in enumerate(as_completed(futures), 1):
             try:
-                noticia_processada = processar_noticia(noticia=noticia, extrator=extrator)
-                noticia_padronizada = padronizar_ocorrencia(noticia_processada)
-                noticias_processadas.append(noticia_padronizada)
-
-                print(f"    Relevante: {noticia_padronizada['relevante_pcj']} | "
-                      f"Categoria: {noticia_padronizada['categoria']} | "
-                      f"Risco: {noticia_padronizada['nivel_risco']}")
-
+                noticia = future.result()
+                noticias_extraidas.append(noticia)
+                if i % 50 == 0:
+                    print(f"  Extraídas: {i}/{len(args)}")
             except Exception as e:
-                print(f"    Erro ao processar notícia: {e}")
-                continue
+                print(f"  Erro na extração: {e}")
+
+    print(f"Extração concluída: {len(noticias_extraidas)} notícias")
+
+    # ------------------------------------------------------------------
+    # ETAPA 3 — Classificação em batch (todas as notícias de uma vez)
+    # ------------------------------------------------------------------
+    print("\nCarregando modelo de embeddings...")
+    carregar_modelo()  # carrega uma vez antes do batch
+
+    print("Classificando relevância em batch...")
+    textos_completos = [
+        f"{n.get('titulo', '')}. {n.get('texto_limpo', '')}".strip()
+        for n in noticias_extraidas
+    ]
+
+    resultados_relevancia = classificar_relevancia_batch(textos_completos)
+
+    for noticia, resultado in zip(noticias_extraidas, resultados_relevancia):
+        noticia["relevante_pcj"] = resultado["relevante"]
+        noticia["confianca_relevante"] = resultado["confianca_relevante"]
+        noticia["confianca_irrelevante"] = resultado["confianca_irrelevante"]
+        noticia["margem"] = resultado["margem"]
+        noticia["metodo_relevancia"] = "EMBEDDING"
+        noticia["termos_pcj"] = ""
+        noticia["termos_hidricos"] = ""
+        noticia["termos_exclusao"] = ""
+
+    relevantes = [n for n in noticias_extraidas if n["relevante_pcj"]]
+    print(f"Relevantes PCJ: {len(relevantes)}/{len(noticias_extraidas)}")
+
+    print("Classificando categoria e risco em batch...")
+    textos_relevantes = [n.get("texto_limpo", "") for n in relevantes]
+    resultados_risco = classificar_categoria_e_risco_batch(textos_relevantes)
+
+    for noticia, resultado in zip(relevantes, resultados_risco):
+        noticia["categoria"] = resultado["categoria"]
+        noticia["evento_principal"] = resultado["evento_principal"]
+        noticia["nivel_risco"] = resultado["nivel_risco"]
+        noticia["justificativa_risco"] = resultado["justificativa_risco"]
+        noticia["metodo_classificacao"] = resultado["metodo_classificacao"]
+
+    # Notícias irrelevantes recebem valores padrão
+    for noticia in noticias_extraidas:
+        if not noticia.get("relevante_pcj"):
+            noticia.setdefault("categoria", "irrelevante")
+            noticia.setdefault("evento_principal", "nenhum evento hídrico identificado")
+            noticia.setdefault("nivel_risco", 0)
+            noticia.setdefault("justificativa_risco", "Notícia não relevante para as Bacias PCJ.")
+            noticia.setdefault("metodo_classificacao", "IRRELEVANTE")
+
+    # ------------------------------------------------------------------
+    # ETAPA 4 — Padronização e salvamento
+    # ------------------------------------------------------------------
+    print("\nPadronizando e salvando resultados...")
+    noticias_processadas = []
+    for noticia in noticias_extraidas:
+        try:
+            noticias_processadas.append(padronizar_ocorrencia(noticia))
+        except Exception as e:
+            print(f"  Erro ao padronizar: {e}")
+
+    noticias_relevantes = [n for n in noticias_processadas if n.get("relevante_pcj")]
+
+    fim = datetime.now()
+    duracao = (fim - inicio).seconds
 
     print("\n" + "=" * 60)
-    noticias_relevantes = [n for n in noticias_processadas if n["relevante_pcj"]]
-
     print(f"Total de fontes processadas:  {len(fontes)}")
-    print(f"Total de notícias coletadas:  {total_coletadas}")
+    print(f"Total de notícias coletadas:  {len(todas_noticias)}")
     print(f"Total processado:             {len(noticias_processadas)}")
     print(f"Total relevante para PCJ:     {len(noticias_relevantes)}")
+    print(f"Tempo total:                  {duracao}s")
     print("=" * 60)
 
     data_execucao = datetime.now().strftime("%Y%m%d_%H%M%S")
-    caminho_saida_bruto = RAW_DATA_DIR / f"pipeline_bruto_{data_execucao}.csv"
-    caminho_saida_relevante = RAW_DATA_DIR / f"pipeline_relevante_{data_execucao}.csv"
+    caminho_bruto = RAW_DATA_DIR / f"pipeline_bruto_{data_execucao}.csv"
+    caminho_relevante = RAW_DATA_DIR / f"pipeline_relevante_{data_execucao}.csv"
 
-    salvar_csv(noticias_processadas, caminho_saida_bruto)
-    salvar_csv(noticias_relevantes, caminho_saida_relevante)
+    salvar_csv(noticias_processadas, caminho_bruto)
+    salvar_csv(noticias_relevantes, caminho_relevante)
 
-    enviar_para_bigquery = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
-
-    if enviar_para_bigquery:
-        print("\nEnviando dados para o BigQuery...")
+    enviar = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
+    if enviar:
+        print("\nEnviando para o BigQuery...")
         try:
             bq = BigQueryClient()
             bq.criar_dataset_se_nao_existir()
             bq.criar_tabela_ocorrencias_se_nao_existir()
-            bq.enviar_csv(caminho_saida_bruto)
-            print("Envio para BigQuery concluído com sucesso.")
+            bq.enviar_csv(caminho_bruto)
+            print("Envio concluído com sucesso.")
         except Exception as e:
             print(f"Erro ao enviar para BigQuery: {e}")
-            print("Os dados foram salvos localmente em data/raw/")
     else:
-        print("\nEnvio para BigQuery desativado no .env.")
-        print(f"Dados salvos em: {caminho_saida_bruto}")
+        print(f"\nEnvio desativado. Dados salvos em: {caminho_bruto}")
 
 
 if __name__ == "__main__":
