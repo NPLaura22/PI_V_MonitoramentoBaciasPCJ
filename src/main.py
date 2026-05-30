@@ -68,6 +68,34 @@ def coletar_fonte(fonte):
     except Exception as e:
         print(f"  [{fonte['nome']}] Erro na coleta: {e}")
         return []
+    
+
+def obter_urls_existentes_bq():
+    """
+    Conecta no BigQuery usando as propriedades do cliente do grupo
+    e retorna um conjunto (set) com todas as URLs já armazenadas.
+    """
+    enviar_para_bigquery = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
+    if not enviar_para_bigquery:
+        print("Aviso: Envio para o BigQuery desativado. Ignorando busca de URLs.")
+        return set()
+
+    print("\n🔍 Buscando URLs de notícias já cadastradas no BigQuery...")
+    try:
+        bq = BigQueryClient()
+        table_id = f"{bq.project_id}.{bq.dataset_id}.{bq.table_ocorrencias}"
+        
+        query = f"SELECT url FROM {table_id}"
+        query_job = bq.client.query(query)
+        resultados = query_job.result()
+        
+        urls_banco = {row.url for row in resultados if row.url}
+        print(f" Sucesso: Encontradas {len(urls_banco)} URLs exclusivas no BigQuery.")
+        return urls_banco
+
+    except Exception as e:
+        print(f" Nota: Não foi possível ler o BigQuery ({e}). O robô seguirá sem o filtro.")
+        return set()
 
 
 def extrair_noticia(args):
@@ -110,73 +138,92 @@ def executar_pipeline():
     print(f"\nTotal coletado: {len(todas_noticias)} notícias de {len(fontes)} fontes")
 
     # ------------------------------------------------------------------
-    # ETAPA 2 — Extração paralela do conteúdo de cada URL
+    # ETAPA 1.5 — Filtro de duplicadas
     # ------------------------------------------------------------------
-    print("\nExtraindo conteúdo das notícias em paralelo...")
+    urls_existentes = obter_urls_existentes_bq()
+    noticias_para_processar = []
+    total_puladas = 0
 
-    extrator = NewsExtractor()
-    args = [(noticia, extrator) for noticia in todas_noticias]
+    for noticia in todas_noticias:
+        if noticia.get("url") in urls_existentes:
+            total_puladas += 1
+            continue
+        noticias_para_processar.append(noticia)
 
-    noticias_extraidas = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS_EXTRACAO) as executor:
-        futures = {executor.submit(extrair_noticia, arg): arg for arg in args}
-        for i, future in enumerate(as_completed(futures), 1):
-            try:
-                noticia = future.result()
-                noticias_extraidas.append(noticia)
-                if i % 50 == 0:
-                    print(f"  Extraídas: {i}/{len(args)}")
-            except Exception as e:
-                print(f"  Erro na extração: {e}")
+    # Se não houver nada novo, avisa e pula a extração
+    if not noticias_para_processar:
+        print("\nTodas as notícias encontradas já estão no BigQuery. Pulando extração.")
+        noticias_extraidas = []
+    else:
+        # ------------------------------------------------------------------
+        # ETAPA 2 — Extração paralela do conteúdo de cada URL NOVA
+        # ------------------------------------------------------------------
+        print(f"\nExtraindo conteúdo de {len(noticias_para_processar)} novas notícias em paralelo...")
 
-    print(f"Extração concluída: {len(noticias_extraidas)} notícias")
+        extrator = NewsExtractor()
+        args = [(noticia, extrator) for noticia in noticias_para_processar]
+
+        noticias_extraidas = []
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS_EXTRACAO) as executor:
+            futures = {executor.submit(extrair_noticia, arg): arg for arg in args}
+            for i, future in enumerate(as_completed(futures), 1):
+                try:
+                    noticia = future.result()
+                    noticias_extraidas.append(noticia)
+                    if i % 50 == 0:
+                        print(f"  Extraídas: {i}/{len(args)}")
+                except Exception as e:
+                    print(f"  Erro na extração: {e}")
+
+        print(f"Extração concluída: {len(noticias_extraidas)} notícias")
 
     # ------------------------------------------------------------------
     # ETAPA 3 — Classificação em batch (todas as notícias de uma vez)
     # ------------------------------------------------------------------
-    print("\nCarregando modelo de embeddings...")
-    carregar_modelo()  # carrega uma vez antes do batch
+    if noticias_extraidas:
+        print("\nCarregando modelo de embeddings...")
+        carregar_modelo()  # carrega uma vez antes do batch
 
-    print("Classificando relevância em batch...")
-    textos_completos = [
-        f"{n.get('titulo', '')}. {n.get('texto_limpo', '')}".strip()
-        for n in noticias_extraidas
-    ]
+        print("Classificando relevância em batch...")
+        textos_completos = [
+            f"{n.get('titulo', '')}. {n.get('texto_limpo', '')}".strip()
+            for n in noticias_extraidas
+        ]
 
-    resultados_relevancia = classificar_relevancia_batch(textos_completos)
+        resultados_relevancia = classificar_relevancia_batch(textos_completos)
 
-    for noticia, resultado in zip(noticias_extraidas, resultados_relevancia):
-        noticia["relevante_pcj"] = resultado["relevante"]
-        noticia["confianca_relevante"] = resultado["confianca_relevante"]
-        noticia["confianca_irrelevante"] = resultado["confianca_irrelevante"]
-        noticia["margem"] = resultado["margem"]
-        noticia["metodo_relevancia"] = "EMBEDDING"
-        noticia["termos_pcj"] = ""
-        noticia["termos_hidricos"] = ""
-        noticia["termos_exclusao"] = ""
+        for noticia, resultado in zip(noticias_extraidas, resultados_relevancia):
+            noticia["relevante_pcj"] = resultado["relevante"]
+            noticia["confianca_relevante"] = resultado["confianca_relevante"]
+            noticia["confianca_irrelevante"] = resultado["confianca_irrelevante"]
+            noticia["margem"] = resultado["margem"]
+            noticia["metodo_relevancia"] = "EMBEDDING"
+            noticia["termos_pcj"] = ""
+            noticia["termos_hidricos"] = ""
+            noticia["termos_exclusao"] = ""
 
-    relevantes = [n for n in noticias_extraidas if n["relevante_pcj"]]
-    print(f"Relevantes PCJ: {len(relevantes)}/{len(noticias_extraidas)}")
+        relevantes = [n for n in noticias_extraidas if n["relevante_pcj"]]
+        print(f"Relevantes PCJ: {len(relevantes)}/{len(noticias_extraidas)}")
 
-    print("Classificando categoria e risco em batch...")
-    textos_relevantes = [n.get("texto_limpo", "") for n in relevantes]
-    resultados_risco = classificar_categoria_e_risco_batch(textos_relevantes)
+        print("Classificando categoria e risco em batch...")
+        textos_relevantes = [n.get("texto_limpo", "") for n in relevantes]
+        resultados_risco = classificar_categoria_e_risco_batch(textos_relevantes)
 
-    for noticia, resultado in zip(relevantes, resultados_risco):
-        noticia["categoria"] = resultado["categoria"]
-        noticia["evento_principal"] = resultado["evento_principal"]
-        noticia["nivel_risco"] = resultado["nivel_risco"]
-        noticia["justificativa_risco"] = resultado["justificativa_risco"]
-        noticia["metodo_classificacao"] = resultado["metodo_classificacao"]
+        for noticia, resultado in zip(relevantes, resultados_risco):
+            noticia["categoria"] = resultado["categoria"]
+            noticia["evento_principal"] = resultado["evento_principal"]
+            noticia["nivel_risco"] = resultado["nivel_risco"]
+            noticia["justificativa_risco"] = resultado["justificativa_risco"]
+            noticia["metodo_classificacao"] = resultado["metodo_classificacao"]
 
-    # Notícias irrelevantes recebem valores padrão
-    for noticia in noticias_extraidas:
-        if not noticia.get("relevante_pcj"):
-            noticia.setdefault("categoria", "irrelevante")
-            noticia.setdefault("evento_principal", "nenhum evento hídrico identificado")
-            noticia.setdefault("nivel_risco", 0)
-            noticia.setdefault("justificativa_risco", "Notícia não relevante para as Bacias PCJ.")
-            noticia.setdefault("metodo_classificacao", "IRRELEVANTE")
+        # Notícias irrelevantes recebem valores padrão
+        for noticia in noticias_extraidas:
+            if not noticia.get("relevante_pcj"):
+                noticia.setdefault("categoria", "irrelevante")
+                noticia.setdefault("evento_principal", "nenhum evento hídrico identificado")
+                noticia.setdefault("nivel_risco", 0)
+                noticia.setdefault("justificativa_risco", "Notícia não relevante para as Bacias PCJ.")
+                noticia.setdefault("metodo_classificacao", "IRRELEVANTE")
 
     # ------------------------------------------------------------------
     # ETAPA 4 — Padronização e salvamento
@@ -197,31 +244,36 @@ def executar_pipeline():
     print("\n" + "=" * 60)
     print(f"Total de fontes processadas:  {len(fontes)}")
     print(f"Total de notícias coletadas:  {len(todas_noticias)}")
-    print(f"Total processado:             {len(noticias_processadas)}")
+    print(f"Total puladas (já no banco):  {total_puladas}")
+    print(f"Total processado nesta rodada:{len(noticias_processadas)}")
     print(f"Total relevante para PCJ:     {len(noticias_relevantes)}")
     print(f"Tempo total:                  {duracao}s")
     print("=" * 60)
 
-    data_execucao = datetime.now().strftime("%Y%m%d_%H%M%S")
-    caminho_bruto = RAW_DATA_DIR / f"pipeline_bruto_{data_execucao}.csv"
-    caminho_relevante = RAW_DATA_DIR / f"pipeline_relevante_{data_execucao}.csv"
+    # Só salva e envia pro banco se houver dados novos
+    if noticias_processadas:
+        data_execucao = datetime.now().strftime("%Y%m%d_%H%M%S")
+        caminho_bruto = RAW_DATA_DIR / f"pipeline_bruto_{data_execucao}.csv"
+        caminho_relevante = RAW_DATA_DIR / f"pipeline_relevante_{data_execucao}.csv"
 
-    salvar_csv(noticias_processadas, caminho_bruto)
-    salvar_csv(noticias_relevantes, caminho_relevante)
+        salvar_csv(noticias_processadas, caminho_bruto)
+        salvar_csv(noticias_relevantes, caminho_relevante)
 
-    enviar = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
-    if enviar:
-        print("\nEnviando para o BigQuery...")
-        try:
-            bq = BigQueryClient()
-            bq.criar_dataset_se_nao_existir()
-            bq.criar_tabela_ocorrencias_se_nao_existir()
-            bq.enviar_csv(caminho_bruto)
-            print("Envio concluído com sucesso.")
-        except Exception as e:
-            print(f"Erro ao enviar para BigQuery: {e}")
+        enviar = os.getenv("ENVIAR_PARA_BIGQUERY", "false").lower() == "true"
+        if enviar:
+            print("\nEnviando para o BigQuery...")
+            try:
+                bq = BigQueryClient()
+                bq.criar_dataset_se_nao_existir()
+                bq.criar_tabela_ocorrencias_se_nao_existir()
+                bq.enviar_csv(caminho_bruto)
+                print("Envio concluído com sucesso.")
+            except Exception as e:
+                print(f"Erro ao enviar para BigQuery: {e}")
+        else:
+            print(f"\nEnvio desativado. Dados salvos em: {caminho_bruto}")
     else:
-        print(f"\nEnvio desativado. Dados salvos em: {caminho_bruto}")
+        print("\nNenhuma notícia nova para salvar no banco nesta rodada.")
 
 
 if __name__ == "__main__":
